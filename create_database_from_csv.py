@@ -136,9 +136,9 @@ class Creator():
         print('Copying started at {}'.format(datetime.now()))
         while True:
             if created:
-                stm = '''COPY {} FROM %s HEADER FREEZE DELIMITER ',' CSV ENCODING 'utf-8';'''.format(table_name) # для первого добавления
+                stm = '''COPY {} FROM %s FORCE NOT NULL {} HEADER FREEZE DELIMITER ',' CSV ENCODING 'utf-8';'''.format(table_name, primary_keys) # для первого добавления
             else:
-                stm = '''COPY {} FROM %s HEADER DELIMITER ',' CSV ENCODING 'utf-8';'''.format(table_name) # для последующих добавлений
+                stm = '''COPY {} FROM %s FORCE NOT NULL {} HEADER DELIMITER ',' CSV ENCODING 'utf-8';'''.format(table_name, primary_keys) # для последующих добавлений
             try:
                 self.cursor.execute(stm, (data_file,))
                 self.conn.commit()

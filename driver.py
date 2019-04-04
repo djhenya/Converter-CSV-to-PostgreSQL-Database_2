@@ -4,7 +4,7 @@ import os
 # from config import settings
 from config_ import settings
 from create_database_from_csv import Creator
-
+from data_check import data_check
 
 '''
 def data_check(csv_file_name): #пока не работает. #TODO: перенести в АПИ
@@ -46,7 +46,9 @@ def csv_to_database():
     password = settings['password']
     connection_port = settings['connection_port']
     database_name = settings['database_name']
-    keys = settings['primary_keys_for_tables'].replace(' ', '_').replace(',', '')
+
+    keys_list = [i.replace(' ', '_') for i in settings['primary_keys_for_tables']]
+    keys_str = ', '.join(keys_list)
     # table_name = settings['table_name']
 
     # Инициализация объекта, осуществляющего копирование
@@ -75,11 +77,11 @@ def csv_to_database():
 
         # c.delete_pkey(table_name) # удаляет PRIMARY KEY
         c.delete_index(table_name) # удаляет индекс
-        c.create_table(table_name, data_file, keys)  # Создание и разметка таблицы для отчётности за определённый год
-        # data_check(data_file) # Проверка csv-файла на валидность данных
+        c.create_table(table_name, data_file, keys_str)  # Создание и разметка таблицы для отчётности за определённый год
+        data_check(data_file) # Проверка csv-файла на валидность данных
         # c.copy_from_csv(table_name, data_file) # Заполнение созданной таблицы данными
-        # c.create_pkey(table_name, keys) # добавляет PRIMARY KEY
-        c.create_index(table_name, keys) # добавляет индекс
+        # c.create_pkey(table_name, keys_str) # добавляет PRIMARY KEY
+        c.create_index(table_name, keys_str) # добавляет индекс
 
         if c.conn:
             c.conn.close()
