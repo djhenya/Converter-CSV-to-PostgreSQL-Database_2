@@ -145,7 +145,11 @@ class Creator():
             except psycopg2.IntegrityError as e: # в случае нахождения дублирующего ключа - запись из базы стирается (т.е. заменяется на запись из csv)
                 self.conn.rollback()
                 regex = r"\(.*\)=\(.*\)"
-                key_and_value = re.search(regex, str(e))[0].strip("()").split(")=(")
+                founded = re.search(regex, str(e))
+                if sys.version_info >= (3, 6):
+                    key_and_value = founded[0].strip("()").split(")=(")
+                else:
+                    key_and_value = str(founded.group(0)).strip("()").split(")=(")
                 key = key_and_value[0]
                 value = key_and_value[1]
                 statement = '''DELETE FROM {} WHERE {} = '{}';'''.format(table_name, key, value)

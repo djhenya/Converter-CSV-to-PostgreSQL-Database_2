@@ -60,12 +60,13 @@ def csv_to_database():
         for file_name in file_list:
             if file_name.startswith('data'):
                 data_file = folder + file_name  # Файл данных
+                if not os.path.isfile(folder + file_name):
+                    raise OSError('"{}" не является файлом.'.format(file_name))
+                break
             # elif file_name.startswith('structure'):
             #     format_description_file = folder + file_name  # Файл с описанием формата файла данных #ВАЖНО: формат в этом файле не соответствует данным
             else:
                 continue
-            if not os.path.isfile(folder + file_name):
-                raise OSError('"{}" не является файлом.'.format(file_name))
         if not data_file: #or format_description_file
             raise OSError('Файл "{}" не найден.'.format(file_name))
 
