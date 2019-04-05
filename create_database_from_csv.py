@@ -1,9 +1,10 @@
 import csv
-import sys
 import re
+import sys
 from datetime import datetime
 
 import psycopg2
+
 
 class Creator():
     '''
@@ -26,7 +27,8 @@ class Creator():
         try:
             connect_str = "dbname='postgres' user={} host={} password={}".format(self.user_name, self.host, self.user_pwd)
             con = psycopg2.connect(connect_str)
-            con.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+            con.set_isolation_level(
+                psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
             cur = con.cursor()
             cur.execute('''CREATE DATABASE {}'''.format(self.db_name))
             con.commit()
@@ -46,6 +48,11 @@ class Creator():
             del cur, con
 
     def create_connection(self):
+        '''
+        Создаёт коннекцию к БД, которую в дальнейшем используют другие методы.
+        Коннекция создаётся как атрибут класса!
+        '''
+
         try:
             self.conn = psycopg2.connect(
                 host=self.host,
@@ -62,13 +69,17 @@ class Creator():
                 self.conn.rollback()
                 self.conn.close()
             sys.exit(str(e))
-        # return conn
-    
+
     def create_table(self, table_name, data_file, primary_keys):
         '''
         Функция для создания и разметки таблицы в БД для набора данных БДИП ФССП.
         При разметке используется файл формата данных в формате .csv .
         А также функция для записи данных из .csv в созданную и размеченную таблицу.
+
+        Arguments:
+            table_name {str} -- Имя создаваемой таблицы.
+            data_file {str} -- Имя файла набора данных БДИП ФССП для разметки и заполнения таблицы.
+            primary_keys {str} -- Primary ключи данной таблицы.
         '''
         # Проверка наличия таблицы в базе
         try:
@@ -88,7 +99,7 @@ class Creator():
             try:
                 with open(data_file, 'r', encoding='utf-8') as csv_file:
                     reader = csv.reader(csv_file, delimiter=',')
-                    columns = next(reader) # парсинг первой строки data-файла
+                    columns = next(reader)  # парсинг первой строки data-файла
 
                     # for row in reader: # парсинг structure-файла
                     #     column_name = row["english field name"].replace(' ', '_').replace(',', '')
@@ -108,7 +119,6 @@ class Creator():
             column_type = "text"
             for column_name in columns:
                 statement += '{} {}, '.format(column_name.replace(' ', '_').replace(',', ''), column_type)
-            # statement = statement.rstrip(", ")
             statement += '''PRIMARY KEY({}));'''.format(primary_keys)
 
             # TODO: написать регулярку для ассерта  # test_dev
@@ -119,7 +129,8 @@ class Creator():
             #                         );'''.format(table_name, primary_keys)
 
             try:
-                self.cursor.execute(statement) # Здесь выполняется один большой запрос (statement) на создание таблицы с 14 полями
+                # Здесь выполняется один большой запрос (statement) на создание таблицы с 14 полями
+                self.cursor.execute(statement)
                 # self.conn.commit()
             except Exception as e:
                 if self.cursor:
@@ -136,17 +147,19 @@ class Creator():
         print('Copying started at {}'.format(datetime.now()))
         while True:
             if created:
-                stm = '''COPY {} FROM %s FORCE NOT NULL {} HEADER FREEZE DELIMITER ',' CSV ENCODING 'utf-8';'''.format(table_name, primary_keys) # для первого добавления
+                # для первого добавления
+                stm = '''COPY {} FROM %s FORCE NOT NULL {} HEADER FREEZE DELIMITER ',' CSV ENCODING 'utf-8';'''.format(table_name, primary_keys)
             else:
-                stm = '''COPY {} FROM %s FORCE NOT NULL {} HEADER DELIMITER ',' CSV ENCODING 'utf-8';'''.format(table_name, primary_keys) # для последующих добавлений
+                # для последующих добавлений
+                stm = '''COPY {} FROM %s FORCE NOT NULL {} HEADER DELIMITER ',' CSV ENCODING 'utf-8';'''.format(table_name, primary_keys)
             try:
                 self.cursor.execute(stm, (data_file,))
                 self.conn.commit()
-            except psycopg2.IntegrityError as e: # в случае нахождения дублирующего ключа - запись из базы стирается (т.е. заменяется на запись из csv)
+            except psycopg2.IntegrityError as e:  # в случае нахождения дублирующего ключа - запись из базы стирается (т.е. заменяется на запись из csv)
                 self.conn.rollback()
                 regex = r"\(.*\)=\(.*\)"
                 founded = re.search(regex, str(e))
-                if sys.version_info >= (3, 6):
+                if sys.version_info >= (3, 6):  # в разных версиях питона по-разному выглядят match-объекты
                     key_and_value = founded[0].strip("()").split(")=(")
                 else:
                     key_and_value = str(founded.group(0)).strip("()").split(")=(")
@@ -167,14 +180,58 @@ class Creator():
 
         print('Copying ended at {}'.format(datetime.now()))
 
+    def create_index(self, table_name, primary_keys):
+        """
+        Функция добавляет в созданную при помощи create_table() таблицу индекс с названием "<названиетаблицы>_index".
+        Индекс - UNIQUE, по primary ключам таблицы.
+
+        Arguments:
+            table_name {str} -- Имя создаваемой в дальнейшем при помощи self.create_table() таблицы.
+            primary_keys {str} -- Primary ключи данной таблицы.
+        """
+
+        statement = '''CREATE UNIQUE INDEX {}_index \
+                       ON public.{} USING btree \
+                       ({} COLLATE pg_catalog."default") \
+                       TABLESPACE pg_default;'''.format(table_name, table_name, primary_keys)
+        try:
+            self.cursor.execute(statement)
+            self.conn.commit()
+        except Exception as e:
+            if self.cursor:
+                self.cursor.close()
+            self.conn.rollback()
+            self.conn.close()
+            sys.exit(str(e))
+            # print(e.__class__.__name__)
+
+    def delete_index(self, table_name):
+        """
+        Функция удаляет созданный ранее этой же программой (или вручную) индекс из таблицы (если он имеет имя "<названиетаблицы>_index").
+
+        Arguments:
+            table_name {str} -- Имя созданной при помощи self.create_table() таблицы.
+        """
+
+        statement = '''DROP INDEX {}_index;'''.format(table_name)
+        try:
+            self.cursor.execute(statement)
+            self.conn.commit()
+        except psycopg2.ProgrammingError as e:  # Если index отсутствует в таблице, то выводится следующее сообщение:
+            print('Index deletion error: index "{}_index" does not exists'.format(table_name))
+            self.conn.rollback()
+        except Exception as e:
+            if self.cursor:
+                self.cursor.close()
+            self.conn.rollback()
+            self.conn.close()
+            sys.exit(str(e))
+
     # def create_pkey(self, table_name, primary_keys):
     #     statement = '''ALTER TABLE {} ADD PRIMARY KEY ({});'''.format(table_name, primary_keys)
     #     try:
     #         self.cursor.execute(statement)
     #         self.conn.commit()
-    #     # except psycopg2.ProgrammingError as e: # Если primary_key присутствует в таблице, то он не пересоздается, а выводится следующее сообщение:
-    #     #     print('Primary_key creation error: primary_key "{}" already exists'.format(primary_keys))
-    #     #     self.conn.rollback()
     #     except Exception as e:
     #         if self.cursor:
     #             self.cursor.close()
@@ -196,38 +253,3 @@ class Creator():
     #         self.conn.rollback()
     #         self.conn.close()
     #         sys.exit(str(e))
-
-    def create_index(self, table_name, primary_keys):
-        statement = '''CREATE UNIQUE INDEX {}_index \
-            ON public.{} USING btree \
-            ({} COLLATE pg_catalog."default") \
-            TABLESPACE pg_default;'''.format(table_name, table_name, primary_keys)
-        try:
-            self.cursor.execute(statement)
-            self.conn.commit()
-        # except psycopg2.ProgrammingError as e: # Если index присутствует в таблице, то он не пересоздается, а выводится следующее сообщение:
-        #     print('Index creation error: index "{}_index" already exists'.format(table_name))
-        #     self.conn.rollback()
-        except Exception as e:
-            if self.cursor:
-                self.cursor.close()
-            self.conn.rollback()
-            self.conn.close()
-            sys.exit(str(e))
-            # print(e.__class__.__name__)
-
-    def delete_index(self, table_name):
-        statement = '''DROP INDEX {}_index;'''.format(table_name) #ALTER TABLE {} 
-        try:
-            self.cursor.execute(statement)
-            self.conn.commit()
-        except psycopg2.ProgrammingError as e: # Если index отсутствует в таблице, то выводится следующее сообщение:
-            print('Index deletion error: index "{}_index" does not exists'.format(table_name))
-            self.conn.rollback()
-        except Exception as e:
-            if self.cursor:
-                self.cursor.close()
-            self.conn.rollback()
-            self.conn.close()
-            sys.exit(str(e))
-
