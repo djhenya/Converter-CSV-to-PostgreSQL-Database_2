@@ -180,20 +180,20 @@ class Creator():
 
         print('Copying ended at {}'.format(datetime.now()))
 
-    def create_index(self, table_name, primary_keys):
+    def create_index(self, table_name, index_field):
         """
         Функция добавляет в созданную при помощи create_table() таблицу индекс с названием "<названиетаблицы>_index".
-        Индекс - UNIQUE, по primary ключам таблицы.
+        Индекс - по переданному полю.
 
         Arguments:
             table_name {str} -- Имя создаваемой в дальнейшем при помощи self.create_table() таблицы.
-            primary_keys {str} -- Primary ключи данной таблицы.
+            index_field {str} -- поле для построения индекса.
         """
 
-        statement = '''CREATE UNIQUE INDEX {}_index \
+        statement = '''CREATE INDEX {}_index \
                        ON public.{} USING btree \
                        ({} COLLATE pg_catalog."default") \
-                       TABLESPACE pg_default;'''.format(table_name, table_name, primary_keys)
+                       TABLESPACE pg_default;'''.format(table_name, table_name, index_field)
         try:
             self.cursor.execute(statement)
             self.conn.commit()

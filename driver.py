@@ -39,6 +39,9 @@ def csv_to_database():
     keys_list = [i.replace(' ', '_')
                  for i in settings['primary_keys_for_tables']]
     keys_str = ', '.join(keys_list)
+    index_list = [i.replace(' ', '_')
+                 for i in settings['index_fields']]
+    index_str = ', '.join(index_list)
 
     # Инициализация объекта, осуществляющего копирование
     c = Creator(psql_host, username, password, database_name, connection_port)
@@ -75,7 +78,7 @@ def csv_to_database():
         # c.copy_from_csv(table_name, data_file) # legacy - в этой версии copy_from_csv встроена в create_table
         # c.create_pkey(table_name, keys_str) # добавляет PRIMARY KEY
         # Добавление индекса
-        c.create_index(table_name, keys_str)
+        c.create_index(table_name, index_str)
 
         if c.conn:
             c.conn.close()  # закрытие коннекции к БД
